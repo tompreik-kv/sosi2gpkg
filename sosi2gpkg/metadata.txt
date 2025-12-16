@@ -1,0 +1,15 @@
+[general]
+name=SOSI Import
+qgisMinimumVersion=3.22
+description=Åpner SOSI raskt eller konverterer til GeoPackage med progress/cancel og raske standardvalg.
+version=1.0.0
+author=Tom-Erik Bakkely Aasheim (Kartverket)
+email=tom-erik.aasheim@kartverket.no
+about=Velg SOSI-fil. Velg Rask åpning (SOSI direkte - BETA, kan og vil mest sannsynlig krasje) eller Konverter til GeoPackage (rask). Spatial index bygges ikke under import for ytelse.
+category=Vector
+repository=https://github.com/tompreik-kv/sosi2gpkg
+tracker=https://github.com/tompreik-kv/sosi2gpkg/issues
+changelog=https://github.com/tompreik-kv/sosi2gpkg/releases
+homepage=https://github.com/tompreik-kv/sosi2gpkg
+icon=icon_kv_sosi2gpkg.svg
+tags=SOSI,GeoPackage,GDAL,ogr2ogr,Kartverket
