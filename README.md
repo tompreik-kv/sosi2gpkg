@@ -1,4 +1,4 @@
-# Kartverket SOSI Import (QGIS plugin)
+# SOSI Import (QGIS plugin)
 
 QGIS-plugin for å åpne SOSI-filer raskt i QGIS, og/eller konvertere SOSI til GeoPackage.
 
