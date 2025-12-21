@@ -1,6 +1,6 @@
 from qgis.PyQt.QtCore import QCoreApplication, QProcess
 from qgis.PyQt.QtGui import QIcon
-from qgis.PyQt.QtWidgets import QAction, QFileDialog, QMessageBox, QProgressDialog, QApplication, QInputDialog
+from qgis.PyQt.QtWidgets import QAction, QFileDialog, QMessageBox, QProgressDialog, QApplication
 from qgis.core import QgsProject, QgsVectorLayer, QgsApplication
 import os
 import shutil
@@ -8,6 +8,7 @@ import tempfile
 from pathlib import Path
 import codecs
 import re
+
 
 class Sosi2GpkgPlugin:
     def __init__(self, iface):
@@ -19,7 +20,7 @@ class Sosi2GpkgPlugin:
         return QCoreApplication.translate("Sosi2GpkgPlugin", text)
 
     def initGui(self):
-        icon_path = os.path.join(os.path.dirname(__file__), "icon_kv_sosi2gpkg.svg")
+        icon_path = os.path.join(os.path.dirname(__file__), "icon_sosi2gpkg.svg")
         self.action = QAction(QIcon(icon_path), self.tr("SOSI Import"), self.iface.mainWindow())
         self.action.triggered.connect(self.run)
         self.iface.addPluginToMenu(self.tr("&Kartverket"), self.action)
@@ -243,7 +244,7 @@ class Sosi2GpkgPlugin:
             return "robust"
 
     # -------------------------
-    # Main UI
+    # Main UI (kun konvertering)
     # -------------------------
     def run(self):
         try:
@@ -262,56 +263,12 @@ class Sosi2GpkgPlugin:
             return
         in_sos = os.path.normpath(in_sos)
 
-        choice = QMessageBox(self.iface.mainWindow())
-        choice.setWindowTitle(self.tr("SOSI Import – velg modus"))
-        choice.setText(self.tr("Hva vil du gjøre?"))
-        choice.setInformativeText(self.tr(
-            "Rask åpning: legger lagene direkte inn i QGIS (raskest).\n"
-            "Konverter til GeoPackage: lagrer til .gpkg med raske standardvalg (spatial index bygges senere ved behov)."
-        ))
-        fast_btn = choice.addButton(self.tr("Rask åpning"), QMessageBox.AcceptRole)
-        conv_btn = choice.addButton(self.tr("Konverter til GeoPackage"), QMessageBox.AcceptRole)
-        cancel_btn = choice.addButton(self.tr("Avbryt"), QMessageBox.RejectRole)
-        choice.setDefaultButton(fast_btn)
-        choice.exec()
-
-        if choice.clickedButton() == cancel_btn:
-            return
-
-        progress = QProgressDialog(self.tr("Starter…"), self.tr("Avbryt"), 0, 0, self.iface.mainWindow())
-        progress.setWindowTitle(self.tr("Kartverket – SOSI"))
-        progress.setMinimumDuration(0)
-        progress.show()
-        QApplication.processEvents()
-
-        # --- FAST OPEN ---
-        if choice.clickedButton() == fast_btn:
-            try:
-                progress.setLabelText(self.tr("Åpner SOSI…"))
-                QApplication.processEvents()
-                try:
-                    added = self.add_all_layers(in_sos, progress)
-                except Exception:
-                    progress.setLabelText(self.tr("Direkte åpning feilet – prøver workaround…"))
-                    QApplication.processEvents()
-                    workaround = self.make_workaround_copy(in_sos, force_45=True, target_encoding="iso-8859-10")
-                    added = self.add_all_layers(workaround, progress)
-
-                progress.close()
-                QMessageBox.information(self.iface.mainWindow(), self.tr("SOSI Import – Rask åpning"),
-                                        self.tr("La til {0} lag i prosjektet.").format(added))
-            except Exception as e:
-                progress.close()
-                QMessageBox.critical(self.iface.mainWindow(), self.tr("SOSI Import – Rask åpning"), str(e))
-            return
-
         # --- CONVERT to GPKG ---
         suggested = str(Path(in_sos).with_suffix(".gpkg"))
         out_gpkg, _ = QFileDialog.getSaveFileName(
             self.iface.mainWindow(), self.tr("Lagre GeoPackage som"), suggested, "GeoPackage (*.gpkg)"
         )
         if not out_gpkg:
-            progress.close()
             return
         out_gpkg = os.path.normpath(out_gpkg)
         if not out_gpkg.lower().endswith(".gpkg"):
@@ -324,10 +281,16 @@ class Sosi2GpkgPlugin:
                 QMessageBox.Yes | QMessageBox.No, QMessageBox.No
             )
             if reply != QMessageBox.Yes:
-                progress.close()
                 return
 
+        progress = QProgressDialog(self.tr("Starter…"), self.tr("Avbryt"), 0, 0, self.iface.mainWindow())
+        progress.setWindowTitle(self.tr("Kartverket – SOSI"))
+        progress.setMinimumDuration(0)
+        progress.show()
+        QApplication.processEvents()
+
         try:
+            # Først prøv direkte konvertering
             try:
                 mode = self.convert_gpkg(in_sos, out_gpkg, progress)
             except Exception:

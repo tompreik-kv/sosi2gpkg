@@ -1,10 +1,9 @@
 # SOSI Import (QGIS plugin)
 
-QGIS-plugin for å åpne SOSI-filer raskt i QGIS, og/eller konvertere SOSI til GeoPackage.
+QGIS-plugin for å konvertere SOSI til GeoPackage.
 
 ## Funksjoner
 
-- **Rask åpning**: legger SOSI-lag direkte inn i QGIS (hurtig for store filer)
 - **Konverter til GeoPackage (rask)**: konverterer med `ogr2ogr` og legger lagene inn i prosjektet
 
 > Merk: Ved “rask” GeoPackage-konvertering bygges **spatial index ikke under import** for ytelse.
@@ -26,7 +25,6 @@ QGIS-plugin for å åpne SOSI-filer raskt i QGIS, og/eller konvertere SOSI til G
 1. Klikk plugin-ikonet i verktøylinjen (Kartverket)
 2. Velg SOSI-fil
 3. Velg:
-   - **Rask åpning**, eller
    - **Konverter til GeoPackage**
 
 ## Bygge spatial index etterpå (anbefalt ved store lag)

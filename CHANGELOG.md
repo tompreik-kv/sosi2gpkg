@@ -5,19 +5,21 @@ Alle vesentlige endringer i dette prosjektet dokumenteres her.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)  
 Versjonering: [SemVer](https://semver.org/lang/no/)
 
-## [Unreleased]
-
-### Added
-
--
+## [1.0.1] - 2025-12-21
 
 ### Changed
 
--
+- Removed “direct open SOSI” mode due to stability issues and crashes.
+- Plugin now focuses on converting SOSI to GeoPackage (GPKG) as the primary workflow.
+- Changed icon to prepare for scaleability and bundle of plugins.
 
 ### Fixed
 
--
+- The "direct open SOSI" is fixed, in the sence of it being removed.
+
+### Notes
+
+- The GeoPackage conversion uses fast defaults where possible and falls back to a more robust mode when required.
 
 ## [1.0.0] - 2025-12-16
 
