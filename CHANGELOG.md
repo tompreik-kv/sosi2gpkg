@@ -5,6 +5,22 @@ Alle vesentlige endringer i dette prosjektet dokumenteres her.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)  
 Versjonering: [SemVer](https://semver.org/lang/no/)
 
+## [1.1.1] - 2025-12-27
+
+### Added
+
+- Compatibilityhelpers for Qt5/Qt6 (QDialog, QMessageBox, QProcess).
+
+### Changed
+
+- Enhanced internal compatibilitylogic (helpers) to support QGIS 3.x (Qt5) and QGIS 3.44+ (Qt6) without change of code.
+
+## [1.1.1] - 2025-12-27
+
+### Fixed
+
+- Qt6-compatibility: updateted dialogcodes, QMessageBox-buttons and QProcess-enums so that the pluging works in both Qt5 and Qt6.
+
 ## [1.1.0] - 2025-12-27
 
 ### Added

@@ -16,24 +16,60 @@ import re
 from typing import Optional, Tuple
 
 
+# =========================================================
+# Qt5/Qt6-robuste helpers (DialogCode + StandardButton)
+# =========================================================
+def dialog_accepted_code():
+    # Qt6: QDialog.DialogCode.Accepted
+    return QDialog.DialogCode.Accepted if hasattr(QDialog, "DialogCode") else QDialog.Accepted
+
+
+def dialog_rejected_code():
+    return QDialog.DialogCode.Rejected if hasattr(QDialog, "DialogCode") else QDialog.Rejected
+
+
+def mb_yes():
+    return QMessageBox.StandardButton.Yes if hasattr(QMessageBox, "StandardButton") else QMessageBox.Yes
+
+
+def mb_no():
+    return QMessageBox.StandardButton.No if hasattr(QMessageBox, "StandardButton") else QMessageBox.No
+
+def qproc_merged_channels():
+    return (
+        QProcess.ProcessChannelMode.MergedChannels
+        if hasattr(QProcess, "ProcessChannelMode")
+        else QProcess.MergedChannels
+    )
+
+def qproc_not_running():
+    return (
+        QProcess.ProcessState.NotRunning
+        if hasattr(QProcess, "ProcessState")
+        else QProcess.NotRunning
+    )
+
+
+
+
 # -------------------------
 # Hoveddialog: velg SOSI inn + GPKG ut
 # -------------------------
 class ImportDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("SOSI Import")
+        self.setWindowTitle("Kartverket – SOSI Import")
         self.setMinimumWidth(720)
 
         root = QVBoxLayout(self)
 
-        g = QGroupBox("Import av SOSI og konvertering til GPKG")
+        g = QGroupBox("Input / Output")
         grid = QGridLayout(g)
 
         # Input
         self.in_edit = QLineEdit()
         self.in_edit.setReadOnly(True)
-        self.btn_in = QPushButton("Velg SOSI-fil…")
+        self.btn_in = QPushButton("Velg SOSI…")
         self.btn_in.clicked.connect(self.pick_input)
 
         grid.addWidget(QLabel("SOSI innfil:"), 0, 0)
@@ -43,7 +79,7 @@ class ImportDialog(QDialog):
         # Output
         self.out_edit = QLineEdit()
         self.out_edit.setReadOnly(True)
-        self.btn_out = QPushButton("Lagre som GPKG-fil…")
+        self.btn_out = QPushButton("Lagre som…")
         self.btn_out.clicked.connect(self.pick_output)
 
         grid.addWidget(QLabel("GPKG utfil:"), 1, 0)
@@ -257,7 +293,7 @@ class Sosi2GpkgPlugin:
         return k in (22, 23, 24, 25)
 
     def make_workaround_copy(self, src_path: str, force_45: bool = True, target_encoding: str = "iso-8859-10") -> str:
-        """Workaround (som 1.0.1): bytt ..TEGNSETT og evt ..SOSI-VERSJON, skriv som ISO-8859-10."""
+        """Workaround: bytt ..TEGNSETT og evt ..SOSI-VERSJON, skriv som ISO-8859-10."""
         src = Path(src_path)
         tmpdir = Path(tempfile.mkdtemp(prefix="qgis_sosi_"))
         dst = tmpdir / (src.stem + "_workaround.sos")
@@ -335,7 +371,7 @@ class Sosi2GpkgPlugin:
         proc = QProcess()
         proc.setProgram(ogr2ogr_path)
         proc.setArguments(args)
-        proc.setProcessChannelMode(QProcess.MergedChannels)
+        proc.setProcessChannelMode(qproc_merged_channels())
 
         rx_pct = re.compile(r"(\d{1,3})\s*%")
         rx_dots = re.compile(r"(?:^|\s)(\d{1,3})(?=\.+)")
@@ -388,8 +424,9 @@ class Sosi2GpkgPlugin:
                         if not got_determinate:
                             progress.setLabelText(self.tr(label))
 
-            if proc.state() == QProcess.NotRunning:
+            if proc.state() == qproc_not_running():
                 break
+
 
         rest = bytes(proc.readAll()).decode("utf-8", errors="replace")
         if rest:
@@ -452,9 +489,8 @@ class Sosi2GpkgPlugin:
             QMessageBox.critical(self.iface.mainWindow(), self.tr("SOSI Import"), str(e))
             return
 
-        # 1) Hoveddialog: input + output
         dlg = ImportDialog(self.iface.mainWindow())
-        if dlg.exec() != QDialog.Accepted:
+        if dlg.exec() != dialog_accepted_code():
             return
 
         in_sos, out_gpkg = dlg.get_values()
@@ -470,23 +506,22 @@ class Sosi2GpkgPlugin:
             reply = QMessageBox.question(
                 self.iface.mainWindow(), self.tr("Overskriv fil?"),
                 self.tr("Filen finnes allerede:\n{0}\n\nVil du overskrive?").format(out_gpkg),
-                QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+                mb_yes() | mb_no(),
+                mb_no()
             )
-            if reply != QMessageBox.Yes:
+            if reply != mb_yes():
                 return
 
-        # 2) Finn KOORDSYS
         koordsys = self.extract_koordsys(in_sos)
         known = self.is_known_koordsys(koordsys)
 
-        # 3) CRS-args brukes kun når KOORDSYS er ukjent/mangler
         crs_args = []
         chosen_in_epsg = None
         chosen_out_epsg = None
 
         if not known:
             crs_dlg = UnknownCrsDialog(self.iface.mainWindow(), koordsys_value=koordsys)
-            if crs_dlg.exec() != QDialog.Accepted:
+            if crs_dlg.exec() != dialog_accepted_code():
                 return
             chosen_in_epsg, chosen_out_epsg = crs_dlg.get_values()
 
@@ -495,9 +530,8 @@ class Sosi2GpkgPlugin:
             else:
                 crs_args = ["-s_srs", f"EPSG:{chosen_in_epsg}", "-t_srs", f"EPSG:{chosen_out_epsg}"]
 
-        # 4) Kjør konvertering
         progress = QProgressDialog(self.tr("Starter…"), self.tr("Avbryt"), 0, 0, self.iface.mainWindow())
-        progress.setWindowTitle(self.tr("SOSI Import"))
+        progress.setWindowTitle(self.tr("Kartverket – SOSI"))
         progress.setMinimumDuration(0)
         progress.show()
         QApplication.processEvents()
@@ -521,17 +555,18 @@ class Sosi2GpkgPlugin:
 
             progress.close()
 
-            # Kort status
             if known:
                 crs_txt = f"KOORDSYS: {koordsys} (kjent)"
             else:
-                crs_txt = f"KOORDSYS: {koordsys if koordsys is not None else 'mangler'} (ukjent) | Input EPSG:{chosen_in_epsg} | Output: {'samme' if chosen_out_epsg is None else f'EPSG:{chosen_out_epsg}'}"
+                crs_txt = (
+                    f"KOORDSYS: {koordsys if koordsys is not None else 'mangler'} (ukjent) | "
+                    f"Input EPSG:{chosen_in_epsg} | Output: {'samme' if chosen_out_epsg is None else f'EPSG:{chosen_out_epsg}'}"
+                )
 
             QMessageBox.information(
                 self.iface.mainWindow(), self.tr("SOSI Import – ferdig"),
-                self.tr(
-                    "Lagret:\n{0}\n\nLa til {1} lag i prosjektet.\n\n{2}"
-                ).format(out_gpkg, added, crs_txt, mode)
+                self.tr("Lagret:\n{0}\n\nLa til {1} lag i prosjektet.\n\n{2}\n\nModus: {3}")
+                .format(out_gpkg, added, crs_txt, mode)
             )
 
         except Exception as e:

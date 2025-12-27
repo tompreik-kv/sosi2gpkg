@@ -1,17 +1,21 @@
 # SOSI Import (QGIS plugin)
 
-QGIS-plugin for å konvertere SOSI til GeoPackage.
+QGIS-plugin for å importere SOSI og konvertere til GeoPackage (GPKG). Resultatet lastes automatisk inn i prosjektet.
 
 ## Funksjoner
 
-- **Konverter til GeoPackage (rask)**: konverterer med `ogr2ogr` og legger lagene inn i prosjektet
+- **Importer SOSI → GeoPackage**: konverterer med `ogr2ogr` og legger alle lag inn i QGIS-prosjektet
+- **Støtte for ukjent/manglende KOORDSYS**: dersom `KOORDSYS` mangler eller er ukjent (f.eks. `99`), får du en dialog der du kan velge riktig input-CRS og eventuelt transformere til en annen CRS
 
-> Merk: Ved “rask” GeoPackage-konvertering bygges **spatial index ikke under import** for ytelse.
-> Du kan bygge spatial index senere i QGIS ved behov.
+> Merk: Under import bygges **spatial index ikke** for ytelse.
+> Bygg spatial index senere i QGIS ved behov.
 
 ## Krav
 
-- QGIS >= 3.22 (testet på QGIS 3.40.x)
+- QGIS >= 3.22
+- Testet på:
+  - QGIS 3.40.x (Qt5)
+  - QGIS 3.44.6 (Qt 6.8.1)
 - GDAL/OGR følger med QGIS (pluginen bruker `ogr2ogr` fra QGIS-installasjonen)
 
 ## Installering (fra ZIP)
@@ -23,14 +27,14 @@ QGIS-plugin for å konvertere SOSI til GeoPackage.
 ## Bruk
 
 1. Klikk plugin-ikonet i verktøylinjen (Kartverket)
-2. Velg SOSI-fil
-3. Velg:
-   - **Konverter til GeoPackage**
+2. Velg **SOSI innfil** og **GPKG utfil**
+3. Trykk **Importer**
+4. Hvis `KOORDSYS` er ukjent/mangler: velg riktig **Input CRS** (påkrevd) og eventuell **Output CRS**
 
 ## Bygge spatial index etterpå (anbefalt ved store lag)
 
 - Åpne **Processing Toolbox**
-- Kjør **Create spatial index** på lag i GeoPackage
+- Kjør **Create spatial index** på lagene i GeoPackage
 
 ## Utvikling
 
