@@ -5,6 +5,23 @@ Alle vesentlige endringer i dette prosjektet dokumenteres her.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)  
 Versjonering: [SemVer](https://semver.org/lang/no/)
 
+## [1.1.0] - 2025-12-27
+
+### Added
+
+- New maindialog for SOSI Import with choice of SOSI inputfile and GeoPackage outputfile.
+- Support for SOSI-files with unknown or lack og `KOORDSYS`:
+  - Extra dialog for choice of input CRS (required) and optional output CRS.
+  - Use `-a_srs` with "same as input" and `-s_srs/-t_srs` with tranformation.
+
+### Changed
+
+- The importflow is now merged in a dialogbased workflow (no loger separate filedialogs in order without overview).
+
+### Fixed
+
+- More robust handling of SOSI-files where `KOORDSYS` is now supported by the SOSI-driver (f.eks. `99`), by letting a user set correct CRS before converting.
+
 ## [1.0.1] - 2025-12-21
 
 ### Changed

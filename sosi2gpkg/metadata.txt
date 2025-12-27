@@ -1,15 +1,15 @@
 [general]
 name=SOSI Import
 qgisMinimumVersion=3.22
-description=Åpner SOSI og konverterer til GeoPackage med progress/cancel og raske standardvalg.
-version=1.0.1
+version=1.1.0
+description=Importer SOSI og konverter til GeoPackage, med støtte for filer uten/med ukjent KOORDSYS.
+about=Velg SOSI-fil og lagre som GeoPackage. Hvis KOORDSYS mangler eller er ukjent kan du velge riktig input-CRS manuelt og evt. transformere til et annet koordinatsystem. Spatial index bygges ikke under import for bedre ytelse.
+category=Vector
+tags=SOSI,GeoPackage,GPKG,GDAL,ogr2ogr,import,Kartverket
 author=Tom-Erik Bakkely Aasheim
 email=tom-erik.aasheim@kartverket.no
-about=Velg SOSI-fil. Konverter til GeoPackage (rask). Spatial index bygges ikke under import for ytelse.
-category=Vector
+icon=icon_sosi2gpkg.svg
+homepage=https://github.com/tompreik-kv/sosi2gpkg
 repository=https://github.com/tompreik-kv/sosi2gpkg
 tracker=https://github.com/tompreik-kv/sosi2gpkg/issues
 changelog=https://github.com/tompreik-kv/sosi2gpkg/releases
-homepage=https://github.com/tompreik-kv/sosi2gpkg
-icon=icon_sosi2gpkg.svg
-tags=SOSI,GeoPackage,GDAL,ogr2ogr,Kartverket

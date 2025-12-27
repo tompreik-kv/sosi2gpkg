@@ -1,6 +1,11 @@
-from qgis.PyQt.QtCore import QCoreApplication, QProcess
+# -*- coding: utf-8 -*-
+from qgis.PyQt.QtCore import QCoreApplication, QProcess, Qt
 from qgis.PyQt.QtGui import QIcon
-from qgis.PyQt.QtWidgets import QAction, QFileDialog, QMessageBox, QProgressDialog, QApplication
+from qgis.PyQt.QtWidgets import (
+    QAction, QFileDialog, QMessageBox, QProgressDialog, QApplication,
+    QDialog, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QLineEdit,
+    QPushButton, QComboBox, QGroupBox
+)
 from qgis.core import QgsProject, QgsVectorLayer, QgsApplication
 import os
 import shutil
@@ -8,8 +13,182 @@ import tempfile
 from pathlib import Path
 import codecs
 import re
+from typing import Optional, Tuple
 
 
+# -------------------------
+# Hoveddialog: velg SOSI inn + GPKG ut
+# -------------------------
+class ImportDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("SOSI Import")
+        self.setMinimumWidth(720)
+
+        root = QVBoxLayout(self)
+
+        g = QGroupBox("Import av SOSI og konvertering til GPKG")
+        grid = QGridLayout(g)
+
+        # Input
+        self.in_edit = QLineEdit()
+        self.in_edit.setReadOnly(True)
+        self.btn_in = QPushButton("Velg SOSI-fil…")
+        self.btn_in.clicked.connect(self.pick_input)
+
+        grid.addWidget(QLabel("SOSI innfil:"), 0, 0)
+        grid.addWidget(self.in_edit, 0, 1)
+        grid.addWidget(self.btn_in, 0, 2)
+
+        # Output
+        self.out_edit = QLineEdit()
+        self.out_edit.setReadOnly(True)
+        self.btn_out = QPushButton("Lagre som GPKG-fil…")
+        self.btn_out.clicked.connect(self.pick_output)
+
+        grid.addWidget(QLabel("GPKG utfil:"), 1, 0)
+        grid.addWidget(self.out_edit, 1, 1)
+        grid.addWidget(self.btn_out, 1, 2)
+
+        root.addWidget(g)
+
+        # Buttons
+        row = QHBoxLayout()
+        row.addStretch(1)
+        self.btn_cancel = QPushButton("Avbryt")
+        self.btn_ok = QPushButton("Importer")
+        self.btn_cancel.clicked.connect(self.reject)
+        self.btn_ok.clicked.connect(self.accept)
+        row.addWidget(self.btn_cancel)
+        row.addWidget(self.btn_ok)
+        root.addLayout(row)
+
+        self._update_ok()
+
+    def _update_ok(self):
+        ok = bool(self.in_edit.text().strip()) and bool(self.out_edit.text().strip())
+        self.btn_ok.setEnabled(ok)
+
+    def pick_input(self):
+        in_sos, _ = QFileDialog.getOpenFileName(
+            self,
+            "Velg SOSI-fil",
+            "",
+            "SOSI (*.sos *.SOS);;Alle filer (*.*)"
+        )
+        if not in_sos:
+            return
+        in_sos = os.path.normpath(in_sos)
+        self.in_edit.setText(in_sos)
+
+        # auto-foreslå utfil hvis ikke satt
+        if not self.out_edit.text().strip():
+            self.out_edit.setText(str(Path(in_sos).with_suffix(".gpkg")))
+
+        self._update_ok()
+
+    def pick_output(self):
+        suggested = self.out_edit.text().strip()
+        if not suggested and self.in_edit.text().strip():
+            suggested = str(Path(self.in_edit.text().strip()).with_suffix(".gpkg"))
+
+        out_gpkg, _ = QFileDialog.getSaveFileName(
+            self,
+            "Lagre GeoPackage som",
+            suggested or "",
+            "GeoPackage (*.gpkg)"
+        )
+        if not out_gpkg:
+            return
+
+        out_gpkg = os.path.normpath(out_gpkg)
+        if not out_gpkg.lower().endswith(".gpkg"):
+            out_gpkg += ".gpkg"
+        self.out_edit.setText(out_gpkg)
+        self._update_ok()
+
+    def get_values(self) -> Tuple[Optional[str], Optional[str]]:
+        return (
+            self.in_edit.text().strip() or None,
+            self.out_edit.text().strip() or None
+        )
+
+
+# -------------------------
+# Dialog (kun når KOORDSYS er ukjent/mangler)
+# -------------------------
+class UnknownCrsDialog(QDialog):
+    CRS_CHOICES = [
+        ("EPSG:25832 (UTM 32N)", 25832),
+        ("EPSG:25833 (UTM 33N)", 25833),
+        ("EPSG:25834 (UTM 34N)", 25834),
+        ("EPSG:25835 (UTM 35N)", 25835),
+        ("EPSG:3857  (WebMercator)", 3857),
+    ]
+
+    OUT_CHOICES = [
+        ("Samme som input (standard)", None),
+        ("EPSG:25832 (UTM 32N)", 25832),
+        ("EPSG:25833 (UTM 33N)", 25833),
+        ("EPSG:25834 (UTM 34N)", 25834),
+        ("EPSG:25835 (UTM 35N)", 25835),
+        ("EPSG:3857  (WebMercator)", 3857),
+    ]
+
+    def __init__(self, parent=None, koordsys_value: Optional[int] = None):
+        super().__init__(parent)
+        self.setWindowTitle("SOSI Import – KOORDSYS ukjent")
+        self.setMinimumWidth(520)
+
+        layout = QVBoxLayout(self)
+
+        info = QLabel(
+            "SOSI-fila har ukjent eller manglende KOORDSYS.\n"
+            "Velg hvilken projeksjon koordinatene faktisk er i."
+        )
+        info.setWordWrap(True)
+        layout.addWidget(info)
+
+        if koordsys_value is not None:
+            layout.addWidget(QLabel(f"Oppgitt KOORDSYS i fila: {koordsys_value} (ukjent)"))
+
+        grid = QGridLayout()
+
+        self.cmb_in = QComboBox()
+        for txt, epsg in self.CRS_CHOICES:
+            self.cmb_in.addItem(txt, epsg)
+
+        self.cmb_out = QComboBox()
+        for txt, epsg in self.OUT_CHOICES:
+            self.cmb_out.addItem(txt, epsg)
+
+        grid.addWidget(QLabel("Input CRS (påkrevd):"), 0, 0)
+        grid.addWidget(self.cmb_in, 0, 1)
+        grid.addWidget(QLabel("Output CRS:"), 1, 0)
+        grid.addWidget(self.cmb_out, 1, 1)
+
+        layout.addLayout(grid)
+
+        row = QHBoxLayout()
+        row.addStretch(1)
+        btn_cancel = QPushButton("Avbryt")
+        btn_ok = QPushButton("OK")
+        btn_cancel.clicked.connect(self.reject)
+        btn_ok.clicked.connect(self.accept)
+        row.addWidget(btn_cancel)
+        row.addWidget(btn_ok)
+        layout.addLayout(row)
+
+    def get_values(self) -> Tuple[int, Optional[int]]:
+        in_epsg = int(self.cmb_in.currentData())
+        out_epsg = self.cmb_out.currentData()
+        out_epsg = int(out_epsg) if out_epsg is not None else None
+        return in_epsg, out_epsg
+
+
+# -------------------------
+# Plugin
+# -------------------------
 class Sosi2GpkgPlugin:
     def __init__(self, iface):
         self.iface = iface
@@ -54,8 +233,31 @@ class Sosi2GpkgPlugin:
                 return c
         raise RuntimeError("Fant ikke ogr2ogr. Sjekk QGIS-installasjonen/OSGeo4W eller PATH.")
 
+    def extract_koordsys(self, src_path: str) -> Optional[int]:
+        try:
+            raw = Path(src_path).read_bytes()
+        except Exception:
+            return None
+
+        if raw.startswith(codecs.BOM_UTF8):
+            raw = raw[len(codecs.BOM_UTF8):]
+        while raw and raw[:1] in b" \t\r\n":
+            raw = raw[1:]
+
+        txt = raw[:200000].decode("utf-8", errors="replace")
+        m = re.search(r"(?mi)^\s*\.{1,6}KOORDSYS\s+(\d+)\b", txt)
+        if not m:
+            return None
+        try:
+            return int(m.group(1))
+        except Exception:
+            return None
+
+    def is_known_koordsys(self, k: Optional[int]) -> bool:
+        return k in (22, 23, 24, 25)
+
     def make_workaround_copy(self, src_path: str, force_45: bool = True, target_encoding: str = "iso-8859-10") -> str:
-        """Workaround: bytt ..TEGNSETT og evt ..SOSI-VERSJON, skriv som ISO-8859-10."""
+        """Workaround (som 1.0.1): bytt ..TEGNSETT og evt ..SOSI-VERSJON, skriv som ISO-8859-10."""
         src = Path(src_path)
         tmpdir = Path(tempfile.mkdtemp(prefix="qgis_sosi_"))
         dst = tmpdir / (src.stem + "_workaround.sos")
@@ -92,7 +294,6 @@ class Sosi2GpkgPlugin:
         if layer_count <= 0:
             return 0
 
-        # Skru av rendering mens vi legger til lag
         canvas = getattr(self.iface, "mapCanvas", None)
         old_render = None
         if canvas:
@@ -126,7 +327,7 @@ class Sosi2GpkgPlugin:
     # ogr2ogr runner (progress + cancel + output capture)
     # -------------------------
     def run_ogr2ogr(self, ogr2ogr_path: str, args: list, progress: QProgressDialog, label: str):
-        progress.setRange(0, 0)  # busy først
+        progress.setRange(0, 0)
         progress.setValue(0)
         progress.setLabelText(label)
         QApplication.processEvents()
@@ -140,7 +341,6 @@ class Sosi2GpkgPlugin:
         rx_dots = re.compile(r"(?:^|\s)(\d{1,3})(?=\.+)")
         got_determinate = False
         last_val = -1
-
         out_all = ""
 
         proc.start()
@@ -206,11 +406,12 @@ class Sosi2GpkgPlugin:
         return out_all
 
     # -------------------------
-    # Converter: GeoPackage (fast + robust fallback)
+    # Converter: GeoPackage (fast + robust fallback) + OPTIONAL CRS override
     # -------------------------
-    def convert_gpkg(self, in_sos: str, out_gpkg: str, progress: QProgressDialog):
-        """Rask konvertering først (-gt, ingen -skipfailures). Fallback til robust (-skipfailures, ingen -gt)."""
+    def convert_gpkg(self, in_sos: str, out_gpkg: str, progress: QProgressDialog,
+                     crs_args: Optional[list] = None):
         ogr2ogr_path = self.find_ogr2ogr()
+        crs_args = crs_args or []
 
         if os.path.exists(out_gpkg):
             try:
@@ -221,30 +422,28 @@ class Sosi2GpkgPlugin:
         base_args = [
             "--config", "OGR_SQLITE_SYNCHRONOUS", "OFF",
             "--config", "OGR_SQLITE_JOURNAL_MODE", "MEMORY",
-            # SPATIAL_INDEX=NO for fart. Bygg spatial index senere hvis ønskelig.
             "-lco", "SPATIAL_INDEX=NO",
             "-nlt", "PROMOTE_TO_MULTI",
             "-progress",
         ]
 
-        fast_args = ["-f", "GPKG", out_gpkg, in_sos, "-gt", "50000"] + base_args
+        fast_args = ["-f", "GPKG", out_gpkg] + crs_args + [in_sos, "-gt", "50000"] + base_args
 
         try:
             self.run_ogr2ogr(ogr2ogr_path, fast_args, progress, self.tr("Konverterer til GeoPackage (rask)"))
             return "fast"
         except Exception:
-            # robust fallback
             if os.path.exists(out_gpkg):
                 try:
                     os.remove(out_gpkg)
                 except Exception:
                     pass
-            robust_args = ["-f", "GPKG", out_gpkg, in_sos, "-skipfailures"] + base_args
+            robust_args = ["-f", "GPKG", out_gpkg] + crs_args + [in_sos, "-skipfailures"] + base_args
             self.run_ogr2ogr(ogr2ogr_path, robust_args, progress, self.tr("Konverterer til GeoPackage (robust)"))
             return "robust"
 
     # -------------------------
-    # Main UI (kun konvertering)
+    # Main
     # -------------------------
     def run(self):
         try:
@@ -253,23 +452,16 @@ class Sosi2GpkgPlugin:
             QMessageBox.critical(self.iface.mainWindow(), self.tr("SOSI Import"), str(e))
             return
 
-        in_sos, _ = QFileDialog.getOpenFileName(
-            self.iface.mainWindow(),
-            self.tr("Velg SOSI-fil"),
-            "",
-            "SOSI (*.sos *.SOS);;Alle filer (*.*)"
-        )
-        if not in_sos:
+        # 1) Hoveddialog: input + output
+        dlg = ImportDialog(self.iface.mainWindow())
+        if dlg.exec() != QDialog.Accepted:
             return
-        in_sos = os.path.normpath(in_sos)
 
-        # --- CONVERT to GPKG ---
-        suggested = str(Path(in_sos).with_suffix(".gpkg"))
-        out_gpkg, _ = QFileDialog.getSaveFileName(
-            self.iface.mainWindow(), self.tr("Lagre GeoPackage som"), suggested, "GeoPackage (*.gpkg)"
-        )
-        if not out_gpkg:
+        in_sos, out_gpkg = dlg.get_values()
+        if not in_sos or not out_gpkg:
             return
+
+        in_sos = os.path.normpath(in_sos)
         out_gpkg = os.path.normpath(out_gpkg)
         if not out_gpkg.lower().endswith(".gpkg"):
             out_gpkg += ".gpkg"
@@ -283,21 +475,41 @@ class Sosi2GpkgPlugin:
             if reply != QMessageBox.Yes:
                 return
 
+        # 2) Finn KOORDSYS
+        koordsys = self.extract_koordsys(in_sos)
+        known = self.is_known_koordsys(koordsys)
+
+        # 3) CRS-args brukes kun når KOORDSYS er ukjent/mangler
+        crs_args = []
+        chosen_in_epsg = None
+        chosen_out_epsg = None
+
+        if not known:
+            crs_dlg = UnknownCrsDialog(self.iface.mainWindow(), koordsys_value=koordsys)
+            if crs_dlg.exec() != QDialog.Accepted:
+                return
+            chosen_in_epsg, chosen_out_epsg = crs_dlg.get_values()
+
+            if chosen_out_epsg is None:
+                crs_args = ["-a_srs", f"EPSG:{chosen_in_epsg}"]
+            else:
+                crs_args = ["-s_srs", f"EPSG:{chosen_in_epsg}", "-t_srs", f"EPSG:{chosen_out_epsg}"]
+
+        # 4) Kjør konvertering
         progress = QProgressDialog(self.tr("Starter…"), self.tr("Avbryt"), 0, 0, self.iface.mainWindow())
-        progress.setWindowTitle(self.tr("Kartverket – SOSI"))
+        progress.setWindowTitle(self.tr("SOSI Import"))
         progress.setMinimumDuration(0)
         progress.show()
         QApplication.processEvents()
 
         try:
-            # Først prøv direkte konvertering
             try:
-                mode = self.convert_gpkg(in_sos, out_gpkg, progress)
+                mode = self.convert_gpkg(in_sos, out_gpkg, progress, crs_args=crs_args)
             except Exception:
                 progress.setLabelText(self.tr("Direkte konvertering feilet – prøver workaround…"))
                 QApplication.processEvents()
                 workaround = self.make_workaround_copy(in_sos, force_45=True, target_encoding="iso-8859-10")
-                mode = self.convert_gpkg(workaround, out_gpkg, progress)
+                mode = self.convert_gpkg(workaround, out_gpkg, progress, crs_args=crs_args)
 
             if progress.wasCanceled():
                 progress.close()
@@ -308,14 +520,20 @@ class Sosi2GpkgPlugin:
             added = self.add_all_layers(out_gpkg, progress)
 
             progress.close()
+
+            # Kort status
+            if known:
+                crs_txt = f"KOORDSYS: {koordsys} (kjent)"
+            else:
+                crs_txt = f"KOORDSYS: {koordsys if koordsys is not None else 'mangler'} (ukjent) | Input EPSG:{chosen_in_epsg} | Output: {'samme' if chosen_out_epsg is None else f'EPSG:{chosen_out_epsg}'}"
+
             QMessageBox.information(
-                self.iface.mainWindow(), self.tr("SOSI Import – konvertert"),
+                self.iface.mainWindow(), self.tr("SOSI Import – ferdig"),
                 self.tr(
-                    "Lagret:\n{0}\n\nLa til {1} lag i prosjektet.\n\n"
-                    "Merk: Spatial index ble ikke bygget under import (for fart). "
-                    "Bygg den senere ved behov (Processing → 'Create spatial index')."
-                ).format(out_gpkg, added)
+                    "Lagret:\n{0}\n\nLa til {1} lag i prosjektet.\n\n{2}"
+                ).format(out_gpkg, added, crs_txt, mode)
             )
+
         except Exception as e:
             progress.close()
-            QMessageBox.critical(self.iface.mainWindow(), self.tr("SOSI Import – konverter"), str(e))
+            QMessageBox.critical(self.iface.mainWindow(), self.tr("SOSI Import – feil"), str(e))
